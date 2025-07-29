@@ -5,3 +5,17 @@ The conversation flows will be managed with LangGraph and we will use FastAPI to
 
 ### Agent Graph 
 ![Agent graph](./graph.png)
+
+
+
+### Frontend
+The UI will be chatGPT-like UI
+
+Done:
+ - Sessions hitory in the sidebar
+ - Add a loading spinner while waiting for ai response
+ - Save sessions persistently on disk (json file) and load it on startup
+
+ToDo:
+
+ - Permit session delete and rename from the sidebar?

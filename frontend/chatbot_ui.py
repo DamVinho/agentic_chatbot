@@ -1,20 +1,68 @@
 import streamlit as st
 import requests
+import uuid
+import os
+import json
 
 # FastAPI server Url
 API_URL = "http://127.0.0.1:8000" # To change when deployed
 
+# helper functions for saving and loading sessions
+SESSIONS_FILE = "chat_sessions.json"
+
 st.title("Smart chatbot")
 
-# Session state for chat history
-if "sessions" not in st.session_state:
-    st.session_state.sessions = {} # will be in the form of {friendly_name: [{"role": ..., "content": ...}]}
-if "session_id_map" not in st.session_state:
-    st.session_state.session_id_map = {}  # {friendly_name: backend_session_id}
-if "current_session" not in st.session_state:
-    st.session_state.current_session = None
+def save_sessions():
+    data = {
+        "sessions": st.session_state.sessions,
+        "last_session": st.session_state.current_session, # the last active session
+        "session_id_map": st.session_state.session_id_map,
+    }
+    with open(SESSIONS_FILE, "w", encoding="utf-8") as f:
+        json.dump(data, f)
+
+def load_sessions():
+    sessions = {}
+    last_session = None
+    session_id_map = {}
+    if os.path.exists(SESSIONS_FILE):
+        with open(SESSIONS_FILE, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            sessions = data.get("sessions", {})
+            last_session = data.get("last_session")
+            session_id_map = data.get("session_id_map", {})
+    return sessions, session_id_map, last_session
+
+# load and restore saved sessions
+if (
+    "sessions" not in st.session_state
+    or "session_id_map" not in st.session_state
+    or "current_session" not in st.session_state
+):
+    loaded_sessions, loaded_map, last_session = load_sessions()
+    st.session_state.sessions = loaded_sessions if loaded_sessions else {}
+    st.session_state.session_id_map = loaded_map if loaded_map else {}
+
+    # set current session
+    if st.session_state.sessions:
+        if last_session and last_session in st.session_state.sessions:
+            st.session_state.current_session = last_session
+        else:
+            st.session_state.current_session = list(st.session_state.sessions.keys())[-1]
+        st.session_state.pending_session = (
+            len(st.session_state.sessions[st.session_state.current_session]) == 0
+            and st.session_state.current_session not in st.session_state.session_id_map
+        )
+    else:
+        # No sessions, create new one
+        friendly_name = "Session 1"
+        st.session_state.sessions[friendly_name] = []
+        st.session_state.current_session = friendly_name
+        st.session_state.pending_session = True
+        save_sessions()
+
 if "pending_session" not in st.session_state:
-    st.session_state.pending_session = False 
+    st.session_state.pending_session = False
 
 # add a session at startup
 if not st.session_state.sessions:
@@ -37,13 +85,16 @@ if st.sidebar.button("➕ New"):
 
         if st.session_state.current_session in st.session_state.session_id_map:
             del st.session_state.session_id_map[st.session_state.current_session]
+        save_sessions()
 
     session_count = len(st.session_state.sessions) + 1
     friendly_name = f"Session {session_count}"
     st.session_state.sessions[friendly_name] = []
     st.session_state.current_session = friendly_name
     st.session_state.pending_session = True
+    save_sessions()
     st.rerun()
+
 
 # show the list of sessions
 session_ids = list(st.session_state.sessions.keys())
@@ -56,6 +107,7 @@ if (st.session_state.pending_session and
             del st.session_state.sessions[s_id]
             if s_id in st.session_state.session_id_map:
                 del st.session_state.session_id_map[s_id]
+            save_sessions()
 
     session_ids = list(st.session_state.sessions.keys())
     st.session_state.pending_session = False
@@ -69,11 +121,11 @@ for s_id in session_ids:
         st.session_state.pending_session = (
             len(st.session_state.sessions[s_id]) == 0 and s_id not in st.session_state.session_id_map
         )
+        save_sessions()
         st.rerun()
 
 if not session_ids:
     st.sidebar.write("No session")
-
 
 # display chat history
 chat_history = []
@@ -102,10 +154,12 @@ if user_input:
 
             st.session_state.session_id_map[session_id] = backend_session_id            
             st.session_state.sessions[session_id].append({"role":"user", "content":user_input})
+            save_sessions()
             st.chat_message("user").write(user_input)
 
             if ai_response:
                 st.session_state.sessions[session_id].append({"role":"ai", "content":ai_response})
+                save_sessions()
                 st.chat_message("ai").write(ai_response)
         else:
             st.error("Failed to start chat session.")
@@ -117,6 +171,7 @@ if user_input:
         backend_session_id = st.session_state.session_id_map.get(session_id)
         if backend_session_id:
             st.session_state.sessions[session_id].append({"role":"user", "content":user_input})
+            save_sessions()
             st.chat_message("user").write(user_input)
             with st.spinner("Thinking..."):
                 response = requests.post(f"{API_URL}/chat/{backend_session_id}/continue", 
@@ -128,6 +183,7 @@ if user_input:
 
                 if ai_response:
                     st.session_state.sessions[session_id].append({"role":"ai", "content":ai_response})
+                    save_sessions()
                     st.chat_message("ai").write(ai_response)
             else:
                 st.error("Failed to continue chat.")
