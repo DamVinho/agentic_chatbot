@@ -93,8 +93,8 @@ if user_input:
     
     # pending ==> start a new session
     if st.session_state.pending_session:
-
-        response = requests.post(f"{API_URL}/chat/start", json={"user_input":user_input})
+        with st.spinner("Thinking..."):
+            response = requests.post(f"{API_URL}/chat/start", json={"user_input":user_input})
         if response.status_code == 200:
             data = response.json()
             backend_session_id = data.get("session_id")
@@ -118,9 +118,9 @@ if user_input:
         if backend_session_id:
             st.session_state.sessions[session_id].append({"role":"user", "content":user_input})
             st.chat_message("user").write(user_input)
-
-            response = requests.post(f"{API_URL}/chat/{backend_session_id}/continue",
-                                     json={"user_input":user_input})
+            with st.spinner("Thinking..."):
+                response = requests.post(f"{API_URL}/chat/{backend_session_id}/continue", 
+                                            json={"user_input":user_input})
         
             if response.status_code == 200:
                 data = response.json()
