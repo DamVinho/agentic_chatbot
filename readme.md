@@ -19,3 +19,19 @@ Done:
 ToDo:
 
  - Permit session delete and rename from the sidebar?
+
+ ### How to run
+
+ - In the first terminal
+
+ ```
+  git clone https://github.com/DamVinho/smart_ai_agent.git
+  cd smart_ai_agent/backend
+  uvicorn api.main:app --reload
+ ```
+ 
+ - In a second terminal
+ 
+ ```
+  streamlit run frontend/chatbot_ui.py
+ ```
