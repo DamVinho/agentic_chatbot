@@ -27,10 +27,16 @@ def fetch_history(session_id):
         pass
     return []
 
+def delete_session(session_id):
+    try:
+        resp = requests.delete(f"{API_URL}/chat/{session_id}")
+        return resp.status_code == 200
+    except Exception:
+        return False
 
 # session state variable
 if "session_map" not in st.session_state:
-    st.session_state.session_map = {} # {friendly: backend_id}: to store friendly name with corresponding backend session id
+    st.session_state.session_map = {} # {session_name: backend_id}: to store friendly name with corresponding backend session id
 if "active_session" not in st.session_state:
     st.session_state.active_session = None
 if "pending_new_session" not in st.session_state:
@@ -53,26 +59,62 @@ st.session_state.session_map = backend_map
 if not st.session_state.active_session and not st.session_state.pending_new_session and friendly_names:
     st.session_state.active_session = friendly_names[-1]
 
-
+# button to create new session
 if st.sidebar.button("➕ New"):
     st.session_state.active_session = None
     st.session_state.pending_new_session = True
     st.rerun()
 
-# chat sessions sidebar
+# chat sessions sidebar title
 st.sidebar.header("Sessions")
 
+delete_trigger = None
+
 # show the list of sessions
-for active_session in friendly_names:
-    label = f"🟢 {active_session}" if active_session == st.session_state.active_session else active_session
-    if st.sidebar.button(label, key=f"select_{active_session}"):
-        st.session_state.active_session = active_session
-        st.session_state.pending_new_session = False
-        st.rerun()
+for idx, friendly_id in enumerate(friendly_names):
+    session_id = st.session_state.session_map[friendly_id]
+    col1, col2 = st.sidebar.columns([8, 1])
+    with col1:
+        label = f"🟢 {friendly_id}" if friendly_id == st.session_state.active_session else friendly_id
+        if st.button(label, key=f"select_{friendly_id}"):
+            st.session_state.active_session = friendly_id
+            st.session_state.pending_new_session = False
+            st.rerun()
+    with col2:
+        if st.button("🗑️", key=f"delete_{friendly_id}"):
+            delete_trigger = (friendly_id, session_id)
 
 if not friendly_names:
     st.sidebar.write("No session")
 
+# the deletion logic
+if delete_trigger is not None:
+    del_friendly_id, del_session_id = delete_trigger
+    success = delete_session(del_session_id)
+    if success:
+        # delete from session_map
+        session_map = st.session_state.session_map.copy()
+        session_names = list(session_map.keys())
+        del session_map[del_friendly_id]
+
+        # update current session: move to the next in list or None if empty
+        if del_friendly_id == st.session_state.active_session:
+            if session_names:
+                del_idx = session_names.index(del_friendly_id)
+                # pick next session, or previous if at end, or None if none left
+                if del_idx < len(session_names) - 1:
+                    st.session_state.active_session = session_names[del_idx + 1]
+                elif del_idx > 0:
+                    st.session_state.active_session = session_names[del_idx - 1]
+                else:
+                    st.session_state.active_session = None
+            else:
+                st.session_state.active_session = None
+        st.session_state.session_map = session_map
+        st.session_state.pending_new_session = False
+        st.rerun()
+    else:
+        st.error("Failed to delete session.")
 
 # display chat history
 if st.session_state.active_session and st.session_state.active_session in st.session_state.session_map:
