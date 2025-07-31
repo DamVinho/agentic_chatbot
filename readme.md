@@ -1,26 +1,39 @@
-# Smart AI Agent build with LangGraph, FastAPI & Streamlit
+# Smart AI Agent build with LangGraph, FastAPI, SQLite and Streamlit
 
 Build a chatbot from scratch with LangGraph, FastAPI & Streamlit. 
 The conversation flows will be managed with LangGraph and we will use FastAPI to serve the chatbot endpoint. The Streamlit UI will be used to interact with the backend API.
 
+Sessions are persisted and fetched from the backend via a SQLite database.
+
 ### Agent Graph 
 ![Agent graph](./graph.png)
 
-
-
 ### Frontend
 The UI will be chatGPT-like UI
+ToDo:
+- ...
+
 
 Done:
  - Sessions hitory in the sidebar
  - Add a loading spinner while waiting for ai response
- - Save sessions persistently on disk (json file) and load it on startup
+ - Can create/rename/delete sessions from the frontend
+ - Persist sessions names
+
+### Backend
 
 ToDo:
+ - Add tools: web-search, etc.
+ - ...
 
- - Permit session delete and rename from the sidebar?
 
- ### How to run
+Done:
+ - Agent graph and workflow
+ - FastAPI backend endpoints
+ - Persist sessions in a SQLite database
+ - Can delete session from the frontend
+
+### How to run
 
  - In the first terminal
 
@@ -35,3 +48,5 @@ ToDo:
  ```
   streamlit run frontend/chatbot_ui.py
  ```
+
+ [Link for Emojis](https://emojikeyboard.top/fr/)
