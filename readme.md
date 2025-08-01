@@ -9,7 +9,10 @@ Sessions are persisted and fetched from the backend via a SQLite database.
 ![Agent graph](./graph.png)
 
 ### Frontend
-The UI will be chatGPT-like UI
+The UI will be chatGPT-like UI:
+
+![GUI](gui.PNG)
+
 ToDo:
 - ...
 
