@@ -9,6 +9,7 @@ from langchain_core.messages import HumanMessage
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy import create_engine
 import datetime
+import re
 
 
 # configure logging
@@ -27,6 +28,12 @@ app = FastAPI(
     description="API for interacting with the smart chatbot",
     version="2.0.0"
 )
+
+# utils function
+def remove_think_tags(raw: str) -> str:
+    # Remove <think>...</think> block
+    cleaned = re.sub(r"<think>.*?</think>", "", raw, flags=re.DOTALL).strip()
+    return cleaned
 
 
 # end points
@@ -68,7 +75,7 @@ async def start_chat(request: ChatRequest):
         db.commit()    
 
         return ChatResponse(
-            response=output["messages"][-1].content,
+            response=remove_think_tags(output["messages"][-1].content),
             session_id=session_id
         )
     except Exception as e:
@@ -121,7 +128,7 @@ async def continue_chat(session_id:str, request:ChatRequest):
         db.commit()
 
         return ChatResponse(
-            response=output["messages"][-1].content,
+            response=remove_think_tags(output["messages"][-1].content),
             session_id=session_id
         )
     except Exception as e:
@@ -175,7 +182,7 @@ async def get_history(session_id: str):
         messages = db.query(Message).filter(Message.session_id == session_id).order_by(Message.created_at).all()
 
         return [
-            {"role": msg.role, "content": msg.content, "created_at": msg.created_at.isoformat()}
+            {"role": msg.role, "content": remove_think_tags(msg.content), "created_at": msg.created_at.isoformat()}
             for msg in messages
         ]
     finally:

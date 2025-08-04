@@ -10,7 +10,7 @@ load_dotenv("/workspace/.env") # path to .env file
 @tool
 def ddg_search_tool(query: str) -> str:
     """Use this tool to search on duckduckgo when up to date informations are needed"""
-    return DuckDuckGoSearchRun().run(query)
+    return DuckDuckGoSearchRun().invoke(query)
 
 @tool
 def google_search_tool(query: str) -> str:

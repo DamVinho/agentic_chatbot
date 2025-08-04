@@ -2,7 +2,7 @@
 from core.state import ChatState
 from utils.model_provider import load_model
 from utils.model_params import MODEL_URL, MODEL_NAME, MODEL_TEMP, SYSTEM_PROMPT
-from langchain_core.messages import SystemMessage
+from langchain_core.messages import SystemMessage, AIMessage
 from langchain_community.tools import tool
 from typing import Optional, List
 
@@ -25,5 +25,6 @@ class ChatNode:
             messages.insert(0, self.systeme_message)
 
         response = self.model.invoke(messages)
+        
         state["messages"].append(response)
-        return state    
+        return state
