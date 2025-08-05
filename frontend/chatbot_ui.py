@@ -63,6 +63,20 @@ def reinit_session_renaming_vars():
     st.session_state.renaming_session = None
     st.session_state.rename_value = ""
 
+# helper function to display chat history
+def display_chat_history():
+    chat_history = []
+    if st.session_state.active_session and st.session_state.active_session in name_to_id:
+        backend_id = name_to_id[st.session_state.active_session]
+        chat_history = fetch_history(backend_id)
+        if chat_history is None:
+            st.error("❌ Backend unreachable. Cannot load chat history.")
+        else:
+            for msg in chat_history:
+                role = "user" if msg["role"] == "user" else "ai"
+                st.chat_message(role).write(msg["content"])
+    else:
+        st.info("Type a message to start a new chat.")
 
 # session state variables
 if "active_session" not in st.session_state:
@@ -73,6 +87,10 @@ if "renaming_session" not in st.session_state:
     st.session_state.renaming_session = None
 if "rename_value" not in st.session_state:
     st.session_state.rename_value = ""
+if "ui_pending_user_msg" not in st.session_state:
+    st.session_state.ui_pending_user_msg = None
+if "ui_msg_sent" not in st.session_state:
+    st.session_state.ui_msg_sent = False
 
 
 # load and restore saved sessions
@@ -93,11 +111,11 @@ if backend_sessions is not None:
             friendly_name = custom_name
         else:
             # find first available default name
-            base = f"Session {i}"
+            default_name = f"Session {i}"
             n = 1
-            friendly_name = base
+            friendly_name = default_name
             while friendly_name in used_names:
-                friendly_name = f"{base} ({n})"
+                friendly_name = f"{default_name} ({n})"
                 n += 1
         id_to_name[sid] = friendly_name
         name_to_id[friendly_name] = sid
@@ -149,8 +167,9 @@ for friendly_name in friendly_names:
             rename_value = st.text_input(
                 "Rename session",
                 value=st.session_state.rename_value or friendly_name,
-                key=f"rename_input_{friendly_name}", label_visibility="collapsed")
-            # save when Enter if value changed
+                key=f"rename_input_{friendly_name}", 
+                label_visibility="collapsed")
+            # save when Enter and if value changed
             if rename_value.strip() != friendly_name:
                 save_rename_trigger = (friendly_name, rename_value.strip())
         else:
@@ -210,68 +229,67 @@ if save_rename_trigger is not None:
         st.session_state.reneme_value = new_name
         st.sidebar.error(rename_error)
 
-# display chat history
-if st.session_state.active_session and st.session_state.active_session in name_to_id:
-    backend_id = name_to_id[st.session_state.active_session]
-    chat_history = fetch_history(backend_id)
-    if chat_history is None:
-        st.error("❌ Backend unreachable. Cannot load chat history.")
-    else:
-        for msg in chat_history:
-            role = "user" if msg["role"] == "user" else "ai"
-            st.chat_message(role).write(msg["content"])
-else:
-    st.info("Type a message to start a new chat.")
-    chat_history = []
-
 # user input field
 user_input = st.chat_input("Ask me anything")
 
-if user_input:
-    reinit_session_renaming_vars() # stop any session renaming
+if st.session_state.ui_pending_user_msg:
+    pending_msg = st.session_state.ui_pending_user_msg
 
-    # if no session is selected, start a new one
-    if not friendly_names:
-        st.session_state.pending_new_session = True
+    # display chat history
+    display_chat_history()
 
-    # start a new session
-    if st.session_state.pending_new_session:
-        with st.spinner("Thinking..."):
-            response = requests.post(f"{API_URL}/chat/start", json={"user_input": user_input})
+    # show pending user message (immediatly)
+    st.chat_message("user").write(pending_msg)
 
-        if response.status_code == 200:
-            data = response.json()
-            session_id = data["session_id"]
+    # call backend
+    if not st.session_state.ui_msg_sent:
+        st.session_state.ui_msg_sent = True
 
-            # reload session list as we just created one
-            backend_sessions = fetch_sessions()
-            for s in backend_sessions or []:
-                if s["session_id"] not in names_map:
-                    # assign default name
-                    base = f"Session {len(names_map) + 1}"
-                    new_name = base
-                    n = 1
-                    while new_name in names_map.values():
-                        new_name = f"{base} ({n})"
-                        n += 1
-                    names_map[s["session_id"]] = new_name
-                    save_session_names(names_map)
-                    st.session_state.active_session = new_name
-                    break
+        # start a new session
+        if st.session_state.pending_new_session or not friendly_names:
+            with st.spinner("Processing..."):
+                response = requests.post(f"{API_URL}/chat/start", json={"user_input": pending_msg})
             
-            st.session_state.pending_new_session = False
-            st.rerun()
-        else:
-            st.error("❌ Failed to start chat session.")
+            if response.status_code == 200:
+                data = response.json()
+                session_id = data["session_id"]
 
-    elif st.session_state.active_session and st.session_state.active_session in name_to_id:
-        backend_id = name_to_id[st.session_state.active_session]
-        with st.spinner("Thinking..."):
-            response = requests.post(
-                f"{API_URL}/chat/{backend_id}/continue",
-                json={"user_input": user_input}
-            )
-        if response.status_code == 200:
-            st.rerun()
-        else:
-            st.error("❌ Failed to continue chat.")
+                # reload session list as we just created one
+                backend_sessions = fetch_sessions()
+                for s in backend_sessions or []:
+                    if s["session_id"] not in names_map:
+                        # assign default name
+                        default_name = f"Session {len(names_map) + 1}"
+                        new_name = default_name
+                        n = 1
+                        while new_name in names_map.values():
+                            new_name = f"{default_name} ({n})"
+                            n += 1
+                        names_map[s["session_id"]] = new_name
+                        save_session_names(names_map)
+                        st.session_state.active_session = new_name
+                        break
+                st.session_state.pending_new_session = False
+            else:
+                st.error("❌ Failed to start chat session.")
+
+        elif st.session_state.active_session and st.session_state.active_session in name_to_id:
+            backend_id = name_to_id[st.session_state.active_session]
+            with st.spinner("Processing..."):
+                response = requests.post(
+                    f"{API_URL}/chat/{backend_id}/continue",
+                    json={"user_input": pending_msg}
+                )
+                if response.status_code != 200:
+                    st.error("❌ Failed to continue chat.")
+        st.session_state.ui_pending_user_msg = None
+        st.session_state.ui_msg_sent = False
+        st.rerun()
+    st.stop()
+else:
+    display_chat_history()
+
+    if user_input:
+        st.session_state.ui_pending_user_msg = user_input
+        reinit_session_renaming_vars()
+        st.rerun()
